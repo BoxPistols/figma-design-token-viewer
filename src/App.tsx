@@ -19,7 +19,7 @@ function flattenTokens(tokens: TokenSet, parentPath: string[] = []): FlattenedTo
 }
 
 function App() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [tokens, setTokens] = useState<TokenSet>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedToken, setSelectedToken] = useState<FlattenedToken | null>(null);
