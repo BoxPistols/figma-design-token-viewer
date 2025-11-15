@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Import, Search, Sun, Moon } from 'lucide-react';
-import type { TokenSet, DesignToken, FlattenedToken } from './types';
+import { Palette, Import, Search, Sun, Moon, Type, Box } from 'lucide-react';
+import type { TokenSet, DesignToken, FlattenedToken, TypographyValue } from './types';
 
 function flattenTokens(tokens: TokenSet, parentPath: string[] = []): FlattenedToken[] {
   return Object.entries(tokens).reduce<FlattenedToken[]>((acc, [key, value]) => {
@@ -160,11 +160,52 @@ function App() {
                     style={{ backgroundColor: token.value as string }}
                   />
                 )}
+                {token.type === 'typography' && (
+                  <div className="w-full h-20 flex items-center justify-center mb-2 border border-gray-300 dark:border-gray-600 rounded-md">
+                    <Type className="w-8 h-8 text-gray-400" />
+                  </div>
+                )}
+                {(token.type === 'spacing' || token.type === 'size') && (
+                  <div className="w-full h-20 flex items-center justify-center mb-2 border border-gray-300 dark:border-gray-600 rounded-md">
+                    <Box className="w-8 h-8 text-gray-400" />
+                  </div>
+                )}
+                {token.type === 'opacity' && (
+                  <div className="w-full h-20 mb-2 bg-gradient-to-r from-white to-black rounded-md flex items-center justify-center">
+                    <div
+                      className="w-full h-full bg-blue-500 rounded-md"
+                      style={{ opacity: token.value as number }}
+                    />
+                  </div>
+                )}
+                {token.type === 'borderRadius' && (
+                  <div className="w-full h-20 flex items-center justify-center mb-2">
+                    <div
+                      className="w-16 h-16 bg-blue-500"
+                      style={{ borderRadius: `${token.value}px` }}
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-1 mb-1">
+                  <span className={`text-xs px-2 py-0.5 rounded ${
+                    token.type === 'color' ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300' :
+                    token.type === 'typography' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' :
+                    token.type === 'spacing' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' :
+                    token.type === 'size' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300' :
+                    token.type === 'opacity' ? 'bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300' :
+                    token.type === 'borderRadius' ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300' :
+                    'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                  }`}>
+                    {token.type}
+                  </span>
+                </div>
                 <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                   {token.path.join('.')}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {token.value.toString()}
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {typeof token.value === 'object'
+                    ? `${(token.value as TypographyValue).fontFamily} ${(token.value as TypographyValue).fontSize}`
+                    : token.value.toString()}
                 </div>
               </div>
             ))}
