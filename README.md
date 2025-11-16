@@ -4,6 +4,11 @@ A comprehensive Figma plugin for managing and applying design tokens with full F
 
 [Edit in StackBlitz next generation editor ⚡️](https://stackblitz.com/~/github.com/BoxPistols/figma-design-token-viewer)
 
+## 📚 Documentation
+
+- **[👤 User Guide](USER_GUIDE.md)** - 使い方、トークンの作成方法、FAQ、トラブルシューティング
+- **[👨‍💻 Development Guide](DEVELOPMENT.md)** - アーキテクチャ、開発環境、コーディング規約
+
 ## ✨ Features
 
 ### Full Figma API Compatibility
@@ -24,6 +29,29 @@ This plugin now supports **all major design token types** with complete Figma AP
 - **Paint Styles** - Color management with style creation
 - **Direct Property Access** - Opacity applied directly to layer properties for maximum compatibility
 
+## 🚀 Quick Start
+
+### For Users
+
+1. Download the plugin (see [Installation](#📦-installation))
+2. Open Figma and run the plugin
+3. Click "Choose JSON file" and select `example-tokens.json`
+4. Tokens are automatically created in Figma!
+5. Select a layer and click any token to apply it
+
+👉 **Detailed instructions**: See [User Guide](USER_GUIDE.md)
+
+### For Developers
+
+```bash
+git clone https://github.com/BoxPistols/figma-design-token-viewer.git
+cd figma-design-token-viewer
+npm install
+npm run build
+```
+
+👉 **Development setup**: See [Development Guide](DEVELOPMENT.md)
+
 ## 📦 Installation
 
 1. Clone this repository
@@ -33,25 +61,18 @@ This plugin now supports **all major design token types** with complete Figma AP
 
 ## 🚀 Usage
 
-### Importing Tokens
+### Basic Workflow
 
-1. Open the plugin in Figma
-2. Click "Choose JSON file" to upload your design tokens
-3. Tokens will be automatically converted to Figma styles and variables
+1. **Import** - Open the plugin and select a JSON file
+2. **Browse** - View all imported tokens in the UI
+3. **Apply** - Select a layer and click a token to apply it
+4. **Search** - Use the search bar to find specific tokens
 
-### Applying Tokens
-
-1. Select one or more layers in Figma
-2. Click on any token in the plugin UI
-3. The token will be applied to your selection based on its type
-
-### Exporting Tokens
-
-Click the "Export" button to download your current tokens as a JSON file.
+For detailed usage instructions, see the [User Guide](USER_GUIDE.md).
 
 ## 📝 Token Format
 
-The plugin supports the W3C Design Tokens format. Here's a complete example:
+The plugin supports the W3C Design Tokens format. Quick example:
 
 ```json
 {
@@ -60,10 +81,6 @@ The plugin supports the W3C Design Tokens format. Here's a complete example:
       "$type": "color",
       "$value": "#3B82F6",
       "$description": "Primary brand color"
-    },
-    "secondary": {
-      "$type": "color",
-      "$value": "#8B5CF6"
     }
   },
   "typography": {
@@ -73,141 +90,75 @@ The plugin supports the W3C Design Tokens format. Here's a complete example:
         "fontFamily": "Inter",
         "fontSize": "24",
         "fontWeight": "700",
-        "lineHeight": "32",
-        "letterSpacing": "-0.5"
-      }
-    },
-    "body": {
-      "$type": "typography",
-      "$value": {
-        "fontFamily": "Inter",
-        "fontSize": "16",
-        "fontWeight": "400",
-        "lineHeight": "24"
+        "lineHeight": "32"
       }
     }
   },
   "spacing": {
-    "small": {
-      "$type": "spacing",
-      "$value": "8"
-    },
     "medium": {
       "$type": "spacing",
-      "$value": "16"
-    },
-    "large": {
-      "$type": "spacing",
-      "$value": "24"
-    }
-  },
-  "sizes": {
-    "icon": {
-      "small": {
-        "$type": "size",
-        "$value": "16"
-      },
-      "medium": {
-        "$type": "size",
-        "$value": "24"
-      }
-    }
-  },
-  "opacity": {
-    "disabled": {
-      "$type": "opacity",
-      "$value": 0.5
-    },
-    "hover": {
-      "$type": "opacity",
-      "$value": 0.8
-    }
-  },
-  "borderRadius": {
-    "small": {
-      "$type": "borderRadius",
-      "$value": "4"
-    },
-    "medium": {
-      "$type": "borderRadius",
-      "$value": "8"
-    },
-    "large": {
-      "$type": "borderRadius",
       "$value": "16"
     }
   }
 }
 ```
 
-## 🎨 Token Types
+See `example-tokens.json` for a complete example with all token types.
 
-### Color
-- Format: HEX color string (e.g., `"#3B82F6"`)
-- Creates: Figma Paint Style
-- Applies to: Fill property of selected layers
+👉 **Full token documentation**: See [User Guide - デザイントークンの作成](USER_GUIDE.md#デザイントークンの作成)
 
-### Typography
-- Format: Object with font properties
-- Creates: Figma Text Style
-- Applies to: Text layers only
-- Properties:
-  - `fontFamily` (required): Font name
-  - `fontSize` (required): Size in pixels
-  - `fontWeight` (optional): 100-900 or style name
-  - `lineHeight` (optional): Pixels or percentage
-  - `letterSpacing` (optional): Pixels or percentage
+## 🎨 Supported Token Types
 
-### Spacing
-- Format: Numeric value in pixels
-- Creates: Figma Variable (Float)
-- Applies to: Auto Layout padding
+| Type | Format | Creates | Applies To |
+|------|--------|---------|------------|
+| **Color** | HEX string | Paint Style | Fill property |
+| **Typography** | Font object | Text Style | Text layers |
+| **Spacing** | Number (px) | Variable | Auto Layout padding |
+| **Size** | Number (px) | Variable | Layer dimensions |
+| **Opacity** | 0-1 | Direct property | Layer opacity |
+| **Border Radius** | Number (px) | Variable | Corner radius |
 
-### Size
-- Format: Numeric value in pixels
-- Creates: Figma Variable (Float)
-- Applies to: Layer dimensions
-
-### Opacity
-- Format: Number between 0-1
-- Creates: No style (Figma does not support layer opacity styles)
-- Applies to: Layer opacity property directly
-
-### Border Radius
-- Format: Numeric value in pixels
-- Creates: Figma Variable (Float)
-- Applies to: Corner radius property
+👉 **Detailed specifications**: See [User Guide - トークンタイプ別の例](USER_GUIDE.md#トークンタイプ別の例)
 
 ## 🛠️ Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Development mode with watch
-npm run dev
-
-# Build for production
-npm run build
-
-# Type checking
-npm run type-check
+npm install          # Install dependencies
+npm run dev          # Development with watch mode
+npm run build        # Production build
+npx tsc --noEmit     # Type checking
 ```
 
-## 📚 API Compatibility
+👉 **Full development guide**: See [Development Guide](DEVELOPMENT.md)
 
-This plugin uses the following Figma Plugin API features:
+## 📚 Technical Details
+
+### Figma API Usage
 
 - `figma.createPaintStyle()` - Color tokens
 - `figma.createTextStyle()` - Typography tokens
 - `figma.variables.createVariable()` - Spacing, size, border radius
-- `figma.variables.createVariableCollection()` - Token organization
-- `figma.loadFontAsync()` - Font loading for typography
-- Direct property access (`node.opacity`) - Opacity tokens
+- `figma.loadFontAsync()` - Font loading with fallbacks
+- Direct property access - Opacity tokens
+
+### Performance Optimizations
+
+- Variable Collection caching for faster imports
+- Duplicate variable detection and updates
+- Multiple font weight name fallbacks
+
+👉 **Architecture details**: See [Development Guide - アーキテクチャ](DEVELOPMENT.md#📐-アーキテクチャ)
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! See [Development Guide - コントリビューション](DEVELOPMENT.md#🤝-コントリビューション) for details.
+
+## 📞 Support
+
+- **Bug Reports**: [GitHub Issues](https://github.com/BoxPistols/figma-design-token-viewer/issues)
+- **Questions**: [GitHub Discussions](https://github.com/BoxPistols/figma-design-token-viewer/discussions)
+- **User Guide**: [USER_GUIDE.md](USER_GUIDE.md)
+- **Dev Guide**: [DEVELOPMENT.md](DEVELOPMENT.md)
 
 ## 📄 License
 
