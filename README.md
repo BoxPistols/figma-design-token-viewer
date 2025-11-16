@@ -14,7 +14,7 @@ This plugin now supports **all major design token types** with complete Figma AP
 - ✅ **Typography** - Text Styles with font family, size, weight, line height, letter spacing
 - ✅ **Spacing** - Variables API for layout spacing
 - ✅ **Size** - Variables API for dimensions
-- ✅ **Opacity** - Effect Styles with opacity values
+- ✅ **Opacity** - Direct layer opacity application
 - ✅ **Border Radius** - Variables API for corner radius
 
 ### Modern Figma APIs
@@ -22,7 +22,7 @@ This plugin now supports **all major design token types** with complete Figma AP
 - **Variables API** - Utilizes Figma's modern Variables API for spacing, size, and border radius tokens
 - **Text Styles** - Full typography support with font loading and fallbacks
 - **Paint Styles** - Color management with style creation
-- **Effect Styles** - Opacity handling through effect styles
+- **Direct Property Access** - Opacity applied directly to layer properties for maximum compatibility
 
 ## 📦 Installation
 
@@ -170,8 +170,8 @@ The plugin supports the W3C Design Tokens format. Here's a complete example:
 
 ### Opacity
 - Format: Number between 0-1
-- Creates: Figma Effect Style
-- Applies to: Layer opacity
+- Creates: No style (Figma does not support layer opacity styles)
+- Applies to: Layer opacity property directly
 
 ### Border Radius
 - Format: Numeric value in pixels
@@ -202,8 +202,8 @@ This plugin uses the following Figma Plugin API features:
 - `figma.createTextStyle()` - Typography tokens
 - `figma.variables.createVariable()` - Spacing, size, border radius
 - `figma.variables.createVariableCollection()` - Token organization
-- `figma.createEffectStyle()` - Opacity tokens
 - `figma.loadFontAsync()` - Font loading for typography
+- Direct property access (`node.opacity`) - Opacity tokens
 
 ## 🤝 Contributing
 

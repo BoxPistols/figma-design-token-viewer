@@ -1,5 +1,8 @@
 import { TokenSet, DesignToken, FlattenedToken, TypographyValue } from './src/types';
 
+// Cache for the variable collection to improve performance when importing many tokens
+let designTokenCollection: VariableCollection | null = null;
+
 figma.showUI(__html__, { width: 800, height: 600, themeColors: true });
 
 figma.ui.onmessage = async (msg) => {
@@ -196,11 +199,10 @@ async function processNumericVariable(name: string, type: string, value: string 
 }
 
 async function processOpacityToken(name: string, value: number) {
-  const style = figma.createEffectStyle();
-  style.name = name;
-  style.effects = [];
-  // Store opacity as plugin data for use when applying
-  style.setPluginData('opacity', value.toString());
+  // Do not create an EffectStyle for opacity as there is no corresponding
+  // effect type in Figma. Applying opacity is handled directly on the node's
+  // opacity property. Creating an empty style here would be misleading for users.
+  // The opacity value is applied directly in applyOpacityToken().
 }
 
 async function processBorderRadiusVariable(name: string, value: string | number) {
@@ -227,6 +229,11 @@ async function processBorderRadiusVariable(name: string, value: string | number)
 }
 
 async function getOrCreateVariableCollection(name: string) {
+  // Use cached collection if it exists and hasn't been removed
+  if (designTokenCollection && !designTokenCollection.removed && designTokenCollection.name === name) {
+    return designTokenCollection;
+  }
+
   const collections = figma.variables.getLocalVariableCollections();
   let collection = collections.find(c => c.name === name);
 
@@ -234,6 +241,8 @@ async function getOrCreateVariableCollection(name: string) {
     collection = figma.variables.createVariableCollection(name);
   }
 
+  // Cache the collection for subsequent calls
+  designTokenCollection = collection;
   return collection;
 }
 
