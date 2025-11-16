@@ -94,14 +94,12 @@ async function processTypographyToken(name: string, value: TypographyValue) {
   // Font family and size
   if (value.fontFamily && value.fontSize) {
     const fontSize = parseFloat(value.fontSize.toString());
-    const fontWeight = parseFontWeight(value.fontWeight);
+    const fontLoaded = await tryLoadFont(value.fontFamily, value.fontWeight);
 
-    try {
-      await figma.loadFontAsync({ family: value.fontFamily, style: fontWeight });
-      style.fontName = { family: value.fontFamily, style: fontWeight };
+    if (fontLoaded) {
+      style.fontName = fontLoaded;
       style.fontSize = fontSize;
-    } catch (error) {
-      console.error(`Failed to load font ${value.fontFamily}:`, error);
+    } else {
       // Fallback to default font
       await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
       style.fontName = { family: 'Inter', style: 'Regular' };
@@ -135,13 +133,66 @@ async function processTypographyToken(name: string, value: TypographyValue) {
   }
 }
 
+async function tryLoadFont(family: string, weight?: string | number): Promise<{ family: string; style: string } | null> {
+  const weightMap: Record<string, string[]> = {
+    '100': ['Thin', 'Hairline'],
+    '200': ['ExtraLight', 'Extra Light', 'UltraLight', 'Ultra Light'],
+    '300': ['Light'],
+    '400': ['Regular', 'Normal'],
+    '500': ['Medium'],
+    '600': ['SemiBold', 'Semi Bold', 'DemiBold', 'Demi Bold'],
+    '700': ['Bold'],
+    '800': ['ExtraBold', 'Extra Bold', 'UltraBold', 'Ultra Bold'],
+    '900': ['Black', 'Heavy'],
+  };
+
+  // Get list of styles to try
+  let stylesToTry: string[] = ['Regular'];
+
+  if (weight) {
+    const numericWeight = typeof weight === 'number' ? weight.toString() : parseInt(weight.toString()).toString();
+    if (weightMap[numericWeight]) {
+      stylesToTry = weightMap[numericWeight];
+    } else if (typeof weight === 'string') {
+      stylesToTry = [weight];
+    }
+  }
+
+  // Try each style
+  for (const style of stylesToTry) {
+    try {
+      await figma.loadFontAsync({ family, style });
+      return { family, style };
+    } catch (error) {
+      // Try next style
+      continue;
+    }
+  }
+
+  return null;
+}
+
 async function processNumericVariable(name: string, type: string, value: string | number) {
   const collection = await getOrCreateVariableCollection('Design Tokens');
   const numericValue = parseFloat(value.toString());
 
-  const variable = figma.variables.createVariable(name, collection, 'FLOAT');
-  variable.setValueForMode(collection.modes[0].modeId, numericValue);
-  variable.description = type;
+  // Check if variable already exists
+  let variable = collection.variables.find(v => {
+    const existingVar = figma.variables.getVariableById(v);
+    return existingVar?.name === name;
+  });
+
+  if (variable) {
+    const existingVar = figma.variables.getVariableById(variable);
+    if (existingVar) {
+      existingVar.setValueForMode(collection.modes[0].modeId, numericValue);
+      existingVar.description = type;
+    }
+  } else {
+    const newVariable = figma.variables.createVariable(name, collection, 'FLOAT');
+    newVariable.setValueForMode(collection.modes[0].modeId, numericValue);
+    newVariable.description = type;
+  }
 }
 
 async function processOpacityToken(name: string, value: number) {
@@ -156,9 +207,23 @@ async function processBorderRadiusVariable(name: string, value: string | number)
   const collection = await getOrCreateVariableCollection('Design Tokens');
   const numericValue = parseFloat(value.toString());
 
-  const variable = figma.variables.createVariable(name, collection, 'FLOAT');
-  variable.setValueForMode(collection.modes[0].modeId, numericValue);
-  variable.description = 'borderRadius';
+  // Check if variable already exists
+  let variable = collection.variables.find(v => {
+    const existingVar = figma.variables.getVariableById(v);
+    return existingVar?.name === name;
+  });
+
+  if (variable) {
+    const existingVar = figma.variables.getVariableById(variable);
+    if (existingVar) {
+      existingVar.setValueForMode(collection.modes[0].modeId, numericValue);
+      existingVar.description = 'borderRadius';
+    }
+  } else {
+    const newVariable = figma.variables.createVariable(name, collection, 'FLOAT');
+    newVariable.setValueForMode(collection.modes[0].modeId, numericValue);
+    newVariable.description = 'borderRadius';
+  }
 }
 
 async function getOrCreateVariableCollection(name: string) {
@@ -170,34 +235,6 @@ async function getOrCreateVariableCollection(name: string) {
   }
 
   return collection;
-}
-
-function parseFontWeight(weight?: string | number): string {
-  if (!weight) return 'Regular';
-
-  const weightMap: Record<string, string> = {
-    '100': 'Thin',
-    '200': 'Extra Light',
-    '300': 'Light',
-    '400': 'Regular',
-    '500': 'Medium',
-    '600': 'Semi Bold',
-    '700': 'Bold',
-    '800': 'Extra Bold',
-    '900': 'Black',
-  };
-
-  if (typeof weight === 'number') {
-    return weightMap[weight.toString()] || 'Regular';
-  }
-
-  const numericWeight = parseInt(weight);
-  if (!isNaN(numericWeight)) {
-    return weightMap[numericWeight.toString()] || 'Regular';
-  }
-
-  // Return as-is if it's already a style name
-  return weight;
 }
 
 async function applyToken(token: FlattenedToken) {
@@ -263,11 +300,10 @@ async function applyTypographyToken(value: TypographyValue) {
   for (const node of figma.currentPage.selection) {
     if (node.type === 'TEXT') {
       const fontSize = parseFloat(value.fontSize.toString());
-      const fontWeight = parseFontWeight(value.fontWeight);
+      const fontLoaded = await tryLoadFont(value.fontFamily, value.fontWeight);
 
-      try {
-        await figma.loadFontAsync({ family: value.fontFamily, style: fontWeight });
-        node.fontName = { family: value.fontFamily, style: fontWeight };
+      if (fontLoaded) {
+        node.fontName = fontLoaded;
         node.fontSize = fontSize;
 
         // Line height
@@ -289,8 +325,8 @@ async function applyTypographyToken(value: TypographyValue) {
             node.letterSpacing = { value: letterSpacing, unit: 'PIXELS' };
           }
         }
-      } catch (error) {
-        console.error(`Failed to apply typography:`, error);
+      } else {
+        console.error(`Failed to load font ${value.fontFamily}`);
         // Fallback to default font
         await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
         node.fontName = { family: 'Inter', style: 'Regular' };
