@@ -16,30 +16,96 @@ figma.ui.onmessage = async (msg) => {
 };
 
 async function handleImportedTokens(tokens: TokenSet) {
-  try {
-    for (const [key, value] of Object.entries(tokens)) {
+  let successCount = 0;
+  let errorCount = 0;
+  let totalCount = 0;
+
+  // Count total tokens
+  const countTokens = (obj: TokenSet): number => {
+    let count = 0;
+    for (const [key, value] of Object.entries(obj)) {
       if ('$type' in value && '$value' in value) {
-        await processToken(key, value as DesignToken);
+        count++;
       } else {
-        await processTokenGroup(key, value as TokenSet);
+        count += countTokens(value as TokenSet);
       }
     }
-    figma.notify('Tokens imported successfully');
+    return count;
+  };
+
+  totalCount = countTokens(tokens);
+
+  // Show initial progress notification
+  figma.notify(`Importing ${totalCount} token${totalCount !== 1 ? 's' : ''}...`, { timeout: 2000 });
+
+  try {
+    // Process tokens in parallel using Promise.allSettled for better performance
+    const results = await Promise.allSettled(
+      Object.entries(tokens).map(async ([key, value]) => {
+        if ('$type' in value && '$value' in value) {
+          await processToken(key, value as DesignToken);
+          return { success: 1, errors: 0 };
+        } else {
+          return await processTokenGroup(key, value as TokenSet);
+        }
+      })
+    );
+
+    // Aggregate results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        successCount += result.value.success;
+        errorCount += result.value.errors;
+      } else {
+        console.error('Token processing failed:', result.reason);
+        errorCount++;
+      }
+    }
+
+    // Show summary notification
+    if (errorCount === 0) {
+      figma.notify(`✓ Successfully imported ${successCount} token${successCount !== 1 ? 's' : ''}`, { timeout: 3000 });
+    } else {
+      figma.notify(`Imported ${successCount} token${successCount !== 1 ? 's' : ''}, ${errorCount} error${errorCount !== 1 ? 's' : ''}`, {
+        error: true,
+        timeout: 5000
+      });
+    }
   } catch (error) {
     console.error('Error importing tokens:', error);
     figma.notify('Error importing tokens', { error: true });
   }
 }
 
-async function processTokenGroup(prefix: string, group: TokenSet) {
-  for (const [key, value] of Object.entries(group)) {
-    const fullKey = `${prefix}/${key}`;
-    if ('$type' in value && '$value' in value) {
-      await processToken(fullKey, value as DesignToken);
+async function processTokenGroup(prefix: string, group: TokenSet): Promise<{ success: number; errors: number }> {
+  let successCount = 0;
+  let errorCount = 0;
+
+  // Process tokens in parallel within the group
+  const results = await Promise.allSettled(
+    Object.entries(group).map(async ([key, value]) => {
+      const fullKey = `${prefix}/${key}`;
+      if ('$type' in value && '$value' in value) {
+        await processToken(fullKey, value as DesignToken);
+        return { success: 1, errors: 0 };
+      } else {
+        return await processTokenGroup(fullKey, value as TokenSet);
+      }
+    })
+  );
+
+  // Aggregate results
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      successCount += result.value.success;
+      errorCount += result.value.errors;
     } else {
-      await processTokenGroup(fullKey, value as TokenSet);
+      console.error('Token group processing failed:', result.reason);
+      errorCount++;
     }
   }
+
+  return { success: successCount, errors: errorCount };
 }
 
 async function processToken(name: string, token: DesignToken) {
