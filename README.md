@@ -1,6 +1,6 @@
 # Figma Design Token Viewer
 
-A comprehensive Figma plugin for managing and applying design tokens with full Figma API compatibility.
+A comprehensive Figma plugin for managing and applying design tokens with **MUI7 & Material Design 2** compliance, full Figma API compatibility, and powerful viewing modes.
 
 [Edit in StackBlitz next generation editor ⚡️](https://stackblitz.com/~/github.com/BoxPistols/figma-design-token-viewer)
 
@@ -8,26 +8,62 @@ A comprehensive Figma plugin for managing and applying design tokens with full F
 
 - **[👤 User Guide](USER_GUIDE.md)** - 使い方、トークンの作成方法、FAQ、トラブルシューティング
 - **[👨‍💻 Development Guide](DEVELOPMENT.md)** - アーキテクチャ、開発環境、コーディング規約
+- **[🧪 Testing Checklist](TESTING_CHECKLIST.md)** - Figma環境での動作検証手順
 
 ## ✨ Features
 
+### 🎨 MUI7 & Material Design 2 Compliance
+
+Built-in design token patterns following official standards:
+
+- **Material Design 2 (Default)** - Official MD2 color palette with proper light/dark mode variants
+- **Modern Minimal** - Clean monochromatic design system
+- **Vibrant** - Bold, colorful accent-based palette
+
+All patterns include proper semantic colors (primary, secondary, error, warning, info, success) with main/light/dark/contrastText variants.
+
+### 📊 Three Powerful View Modes
+
+- **Card (Minimum)** - Compact grid view for quick browsing
+- **Card (Detailed)** - Expanded cards with full token information and descriptions
+- **Table** - Spreadsheet-style view with all metadata
+
+### 🔄 Token Type Separation
+
+Tokens are automatically **grouped by type** for better organization:
+- **Colors** - Separated by semantic meaning (primary, secondary, etc.)
+- **Typography** - MUI-standard typography scale (h1-h6, body1-2, etc.)
+- **Spacing** - 8px-based spacing system
+- **Size** - Icon and button size tokens
+- **Opacity** - Material Design opacity standards
+- **Border Radius** - Consistent corner radius values
+
+### 🌓 Complete Dark/Light Mode Binding
+
+True theme support with proper bindings:
+- `colors.background.light` / `colors.background.dark`
+- `colors.text.light` / `colors.text.dark`
+- `colors.action.light` / `colors.action.dark`
+- Automatic theme switching preserves design consistency
+
 ### Full Figma API Compatibility
 
-This plugin now supports **all major design token types** with complete Figma API integration:
+This plugin supports **all major design token types** with complete Figma API integration:
 
-- ✅ **Color** - Paint Styles with HEX to RGB conversion
-- ✅ **Typography** - Text Styles with font family, size, weight, line height, letter spacing
-- ✅ **Spacing** - Variables API for layout spacing
+- ✅ **Color** - Paint Styles with HEX/RGBA support
+- ✅ **Typography** - Text Styles following MUI typography scale
+- ✅ **Spacing** - Variables API for layout spacing (8px base)
 - ✅ **Size** - Variables API for dimensions
 - ✅ **Opacity** - Direct layer opacity application
 - ✅ **Border Radius** - Variables API for corner radius
 
-### Modern Figma APIs
+### 💾 Smart Data Management
 
-- **Variables API** - Utilizes Figma's modern Variables API for spacing, size, and border radius tokens
-- **Text Styles** - Full typography support with font loading and fallbacks
-- **Paint Styles** - Color management with style creation
-- **Direct Property Access** - Opacity applied directly to layer properties for maximum compatibility
+- **localStorage CRUD** - All settings auto-saved (tokens, view mode, theme, pattern)
+- **Pattern Switching** - Instantly switch between design systems
+- **Import/Export** - Full JSON import/export with pattern name
+- **Reset** - Quick reset to default pattern
+- **Clear** - Complete token deletion
 
 ## 🚀 Quick Start
 
@@ -35,9 +71,12 @@ This plugin now supports **all major design token types** with complete Figma AP
 
 1. Download the plugin (see [Installation](#📦-installation))
 2. Open Figma and run the plugin
-3. Click "Choose JSON file" and select `example-tokens.json`
-4. Tokens are automatically created in Figma!
-5. Select a layer and click any token to apply it
+3. **Try the built-in patterns!**
+   - Select a pattern: Material Design 2, Modern Minimal, or Vibrant
+   - Tokens load automatically
+4. **Switch view modes** to find your preferred layout
+5. **Import custom tokens** via JSON file
+6. Select a layer and click any token to apply it
 
 👉 **Detailed instructions**: See [User Guide](USER_GUIDE.md)
 
