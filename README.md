@@ -188,6 +188,168 @@ npx tsc --noEmit     # Type checking
 
 👉 **Architecture details**: See [Development Guide - アーキテクチャ](DEVELOPMENT.md#📐-アーキテクチャ)
 
+## 📖 Learning Figma Plugin API
+
+### Official Resources
+
+**📘 Essential Documentation:**
+- [Plugin API Overview](https://www.figma.com/plugin-docs/) - Start here for official documentation
+- [Plugin API Reference](https://www.figma.com/plugin-docs/api/api-reference/) - Complete API reference
+- [Plugin Quickstart Guide](https://www.figma.com/plugin-docs/setup/) - Build your first plugin in 5 minutes
+
+**🎨 API Guides Used in This Plugin:**
+- [Styles API](https://www.figma.com/plugin-docs/api/PaintStyle/) - `createPaintStyle()`, `createTextStyle()`
+- [Variables API](https://www.figma.com/plugin-docs/api/variables/) - `createVariable()`, `createVariableCollection()`
+- [Font Loading](https://www.figma.com/plugin-docs/api/figma/#loadfontasync) - `loadFontAsync()`
+- [Nodes & Properties](https://www.figma.com/plugin-docs/api/nodes/) - Layer manipulation
+
+### Interactive Tutorials
+
+**🚀 Step-by-Step Learning:**
+
+1. **[Figma Plugin Quickstart](https://www.figma.com/plugin-docs/setup/)**
+   - Set up your development environment
+   - Create your first "Hello World" plugin
+   - Understand the plugin structure
+
+2. **[Working with Nodes](https://www.figma.com/plugin-docs/working-with-nodes/)**
+   - Learn how to access and modify layers
+   - Understand the node tree structure
+   - Practice with selections
+
+3. **[Creating Styles](https://www.figma.com/plugin-docs/creating-styles/)**
+   - Create Paint Styles (colors)
+   - Create Text Styles (typography)
+   - Manage style updates
+
+4. **[Variables Deep Dive](https://www.figma.com/plugin-docs/api/variables/)**
+   - Modern approach for design tokens
+   - Create variable collections
+   - Bind variables to properties
+
+### Hands-On Learning Path
+
+**📝 Recommended Learning Order:**
+
+```
+Week 1: Basics
+├── Day 1-2: Complete Quickstart Guide
+├── Day 3-4: Explore Plugin API Reference
+└── Day 5-7: Build a simple plugin (color picker, etc.)
+
+Week 2: This Project
+├── Day 1-2: Read code.ts - understand token processing
+├── Day 3-4: Study tokenPatterns.ts - see MUI/MD2 structure
+├── Day 5-6: Examine App.tsx - learn UI integration
+└── Day 7: Build a feature or fix a bug
+
+Week 3: Advanced
+├── Variables API mastery
+├── Performance optimization
+└── Complex token transformations
+```
+
+### Code Examples from This Plugin
+
+**Example 1: Creating a Paint Style (Color Token)**
+```typescript
+// From code.ts:145-163
+const existingStyles = figma.getLocalPaintStyles();
+const existingStyle = existingStyles.find(s => s.name === name);
+
+if (existingStyle) {
+  existingStyle.paints = [{ type: 'SOLID', color: rgb }];
+} else {
+  const paintStyle = figma.createPaintStyle();
+  paintStyle.name = name;
+  paintStyle.paints = [{ type: 'SOLID', color: rgb }];
+}
+```
+
+**Example 2: Creating a Variable (Spacing Token)**
+```typescript
+// From code.ts:277-291
+const existingVariable = collection.variables.find(v => v.name === name);
+
+if (existingVariable) {
+  existingVariable.setValueForMode(modeId, value);
+} else {
+  const variable = figma.variables.createVariable(name, collection, 'FLOAT');
+  variable.setValueForMode(modeId, value);
+  variable.description = `Design token: ${tokenType}`;
+}
+```
+
+**Example 3: Font Loading with Fallback**
+```typescript
+// From code.ts:228-250
+async function tryLoadFont(family: string, weight: number): Promise<boolean> {
+  const styleNames = [
+    weightMap[weight] || 'Regular',
+    `${weight}`,
+    'Regular'
+  ];
+
+  for (const style of styleNames) {
+    try {
+      await figma.loadFontAsync({ family, style });
+      return true;
+    } catch (e) {
+      continue;
+    }
+  }
+  return false;
+}
+```
+
+### Community Resources
+
+**💡 Additional Learning:**
+- [Figma Plugin Community](https://www.figma.com/community/explore?tab=plugins) - Explore open-source plugins
+- [Figma Developers Discord](https://discord.gg/figma) - Ask questions, get help
+- [Figma Plugin Samples](https://github.com/figma/plugin-samples) - Official example plugins
+- [Awesome Figma Plugins](https://github.com/thomas-lowry/figma-plugins-on-github) - Curated list of open-source plugins
+
+### Debugging Tips
+
+**🐛 Essential Tools:**
+```javascript
+// 1. Console logging in plugin code (code.ts)
+console.log('Token value:', token.$value);
+console.warn('Invalid color format:', value);
+console.error('Font loading failed:', error);
+
+// 2. Open Developer Console in Figma
+// Mac: Cmd + Option + I
+// Windows: Ctrl + Shift + I
+
+// 3. Check plugin messages
+figma.notify('Processing 50 tokens...');
+```
+
+### Testing Your Plugin
+
+**✅ Verification Checklist:**
+
+Use our comprehensive testing guide: [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md)
+
+Quick test flow:
+1. Load plugin in Figma Desktop App
+2. Import `example-tokens.json`
+3. Check Local Styles panel (Paint & Text Styles)
+4. Check Local Variables panel
+5. Select layers and apply tokens
+6. Verify values in properties panel
+
+### Next Steps
+
+After understanding the basics:
+1. ✅ Fork this repository
+2. ✅ Read [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details
+3. ✅ Study [code.ts](/code.ts) to see real API usage
+4. ✅ Experiment with [tokenPatterns.ts](/src/tokenPatterns.ts) to create your own design system
+5. ✅ Build new features or improvements
+
 ## 🤝 Contributing
 
 Contributions are welcome! See [Development Guide - コントリビューション](DEVELOPMENT.md#🤝-コントリビューション) for details.
