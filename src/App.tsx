@@ -1,6 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Import, Search, Sun, Moon, Type, Box } from 'lucide-react';
+import { Palette, Import, Search, Sun, Moon, Type, Box, RotateCcw } from 'lucide-react';
 import type { TokenSet, DesignToken, FlattenedToken, TypographyValue } from './types';
+import { defaultTokens } from './defaultTokens';
+
+// localStorage keys
+const STORAGE_KEYS = {
+  TOKENS: 'figma-design-tokens',
+  DARK_MODE: 'figma-design-tokens-dark-mode'
+};
+
+// Save tokens to localStorage
+const saveTokensToStorage = (tokens: TokenSet) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TOKENS, JSON.stringify(tokens));
+  } catch (error) {
+    console.error('Failed to save tokens to localStorage:', error);
+  }
+};
+
+// Load tokens from localStorage
+const loadTokensFromStorage = (): TokenSet | null => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.TOKENS);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.error('Failed to load tokens from localStorage:', error);
+    return null;
+  }
+};
+
+// Save dark mode preference
+const saveDarkModeToStorage = (isDark: boolean) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DARK_MODE, JSON.stringify(isDark));
+  } catch (error) {
+    console.error('Failed to save dark mode to localStorage:', error);
+  }
+};
+
+// Load dark mode preference
+const loadDarkModeFromStorage = (): boolean => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+    return stored ? JSON.parse(stored) : true; // Default to dark mode
+  } catch (error) {
+    console.error('Failed to load dark mode from localStorage:', error);
+    return true;
+  }
+};
 
 function getTokenBadgeClasses(tokenType: string): string {
   const classMap: Record<string, string> = {
@@ -31,10 +78,24 @@ function flattenTokens(tokens: TokenSet, parentPath: string[] = []): FlattenedTo
 }
 
 function App() {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [tokens, setTokens] = useState<TokenSet>({});
+  // Initialize state from localStorage or defaults
+  const [isDarkMode, setIsDarkMode] = useState(() => loadDarkModeFromStorage());
+  const [tokens, setTokens] = useState<TokenSet>(() => {
+    const stored = loadTokensFromStorage();
+    return stored || defaultTokens;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedToken, setSelectedToken] = useState<FlattenedToken | null>(null);
+
+  // Save tokens to localStorage whenever they change
+  useEffect(() => {
+    saveTokensToStorage(tokens);
+  }, [tokens]);
+
+  // Save dark mode preference whenever it changes
+  useEffect(() => {
+    saveDarkModeToStorage(isDarkMode);
+  }, [isDarkMode]);
 
   const flatTokens = flattenTokens(tokens);
   const filteredTokens = searchQuery
@@ -74,6 +135,13 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleReset = () => {
+    if (confirm('Are you sure you want to reset to default tokens? This will overwrite your current tokens.')) {
+      setTokens(defaultTokens);
+      localStorage.removeItem(STORAGE_KEYS.TOKENS);
+    }
+  };
+
   const handleApplyToken = (token: FlattenedToken) => {
     parent.postMessage({
       pluginMessage: {
@@ -91,22 +159,37 @@ function App() {
     <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <Palette className="w-8 h-8 text-blue-500" />
-            <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              Design Tokens Manager
-            </h1>
+            <div>
+              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Design Tokens Manager
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {flatTokens.length} token{flatTokens.length !== 1 ? 's' : ''} loaded
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
-          >
-            {isDarkMode ? (
-              <Sun className="w-5 h-5 text-gray-200" />
-            ) : (
-              <Moon className="w-5 h-5 text-gray-600" />
-            )}
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleReset}
+              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+              title="Reset to default tokens"
+            >
+              <RotateCcw className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+              title="Toggle dark mode"
+            >
+              {isDarkMode ? (
+                <Sun className="w-5 h-5 text-gray-200" />
+              ) : (
+                <Moon className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
