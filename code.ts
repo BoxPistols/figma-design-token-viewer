@@ -63,7 +63,7 @@ async function processToken(name: string, token: DesignToken) {
         break;
 
       case 'borderRadius':
-        await processBorderRadiusVariable(name, token.$value as string | number);
+        await processNumericVariable(name, token.$type, token.$value as string | number);
         break;
 
       default:
@@ -75,24 +75,46 @@ async function processToken(name: string, token: DesignToken) {
 }
 
 async function processColorToken(name: string, value: string) {
-  const style = figma.createPaintStyle();
-  style.name = name;
-  const color = hexToRgb(value);
-  if (color) {
-    style.paints = [{
-      type: 'SOLID',
-      color: {
-        r: color.r / 255,
-        g: color.g / 255,
-        b: color.b / 255
-      }
-    }];
+  // Check if a paint style with this name already exists
+  const existingStyles = figma.getLocalPaintStyles();
+  let style = existingStyles.find(s => s.name === name);
+
+  if (!style) {
+    style = figma.createPaintStyle();
+    style.name = name;
   }
+
+  const color = hexToRgb(value);
+  if (!color) {
+    console.warn(`Invalid color value for ${name}: ${value}`);
+    return;
+  }
+
+  style.paints = [{
+    type: 'SOLID',
+    color: {
+      r: color.r / 255,
+      g: color.g / 255,
+      b: color.b / 255
+    }
+  }];
 }
 
 async function processTypographyToken(name: string, value: TypographyValue) {
-  const style = figma.createTextStyle();
-  style.name = name;
+  // Validate required fields
+  if (!value.fontFamily || !value.fontSize) {
+    console.warn(`Invalid typography token ${name}: missing fontFamily or fontSize`);
+    return;
+  }
+
+  // Check if a text style with this name already exists
+  const existingStyles = figma.getLocalTextStyles();
+  let style = existingStyles.find(s => s.name === name);
+
+  if (!style) {
+    style = figma.createTextStyle();
+    style.name = name;
+  }
 
   // Font family and size
   if (value.fontFamily && value.fontSize) {
@@ -179,14 +201,20 @@ async function processNumericVariable(name: string, type: string, value: string 
   const collection = await getOrCreateVariableCollection('Design Tokens');
   const numericValue = parseFloat(value.toString());
 
+  // Validate numeric value
+  if (isNaN(numericValue)) {
+    console.warn(`Invalid numeric value for ${name}: ${value}`);
+    return;
+  }
+
   // Check if variable already exists
-  let variable = collection.variables.find(v => {
+  const existingVariableId = collection.variables.find(v => {
     const existingVar = figma.variables.getVariableById(v);
     return existingVar?.name === name;
   });
 
-  if (variable) {
-    const existingVar = figma.variables.getVariableById(variable);
+  if (existingVariableId) {
+    const existingVar = figma.variables.getVariableById(existingVariableId);
     if (existingVar) {
       existingVar.setValueForMode(collection.modes[0].modeId, numericValue);
       existingVar.description = type;
@@ -203,29 +231,6 @@ async function processOpacityToken(name: string, value: number) {
   // effect type in Figma. Applying opacity is handled directly on the node's
   // opacity property. Creating an empty style here would be misleading for users.
   // The opacity value is applied directly in applyOpacityToken().
-}
-
-async function processBorderRadiusVariable(name: string, value: string | number) {
-  const collection = await getOrCreateVariableCollection('Design Tokens');
-  const numericValue = parseFloat(value.toString());
-
-  // Check if variable already exists
-  let variable = collection.variables.find(v => {
-    const existingVar = figma.variables.getVariableById(v);
-    return existingVar?.name === name;
-  });
-
-  if (variable) {
-    const existingVar = figma.variables.getVariableById(variable);
-    if (existingVar) {
-      existingVar.setValueForMode(collection.modes[0].modeId, numericValue);
-      existingVar.description = 'borderRadius';
-    }
-  } else {
-    const newVariable = figma.variables.createVariable(name, collection, 'FLOAT');
-    newVariable.setValueForMode(collection.modes[0].modeId, numericValue);
-    newVariable.description = 'borderRadius';
-  }
 }
 
 async function getOrCreateVariableCollection(name: string) {
@@ -289,7 +294,11 @@ async function applyToken(token: FlattenedToken) {
 
 async function applyColorToken(value: string) {
   const color = hexToRgb(value);
-  if (!color) return;
+  if (!color) {
+    console.warn(`Invalid color value: ${value}`);
+    figma.notify(`Invalid color value: ${value}`, { error: true });
+    return;
+  }
 
   for (const node of figma.currentPage.selection) {
     if ('fills' in node) {
@@ -306,6 +315,13 @@ async function applyColorToken(value: string) {
 }
 
 async function applyTypographyToken(value: TypographyValue) {
+  // Validate required fields
+  if (!value.fontFamily || !value.fontSize) {
+    console.warn('Invalid typography token: missing fontFamily or fontSize');
+    figma.notify('Invalid typography token', { error: true });
+    return;
+  }
+
   for (const node of figma.currentPage.selection) {
     if (node.type === 'TEXT') {
       const fontSize = parseFloat(value.fontSize.toString());
@@ -348,6 +364,13 @@ async function applyTypographyToken(value: TypographyValue) {
 async function applyNumericToken(value: string | number, type: string) {
   const numericValue = parseFloat(value.toString());
 
+  // Validate numeric value
+  if (isNaN(numericValue) || numericValue < 0) {
+    console.warn(`Invalid ${type} value: ${value}. Must be a non-negative number.`);
+    figma.notify(`Invalid ${type} value.`, { error: true });
+    return;
+  }
+
   for (const node of figma.currentPage.selection) {
     if (type === 'spacing') {
       // Apply as padding/spacing in Auto Layout
@@ -367,6 +390,13 @@ async function applyNumericToken(value: string | number, type: string) {
 }
 
 async function applyOpacityToken(value: number) {
+  // Validate opacity value (0-1)
+  if (value < 0 || value > 1) {
+    console.warn(`Invalid opacity value: ${value}. Must be between 0 and 1.`);
+    figma.notify(`Invalid opacity value. Must be between 0 and 1.`, { error: true });
+    return;
+  }
+
   for (const node of figma.currentPage.selection) {
     if ('opacity' in node) {
       node.opacity = value;
@@ -376,6 +406,13 @@ async function applyOpacityToken(value: number) {
 
 async function applyBorderRadiusToken(value: string | number) {
   const numericValue = parseFloat(value.toString());
+
+  // Validate numeric value
+  if (isNaN(numericValue) || numericValue < 0) {
+    console.warn(`Invalid border radius value: ${value}. Must be a non-negative number.`);
+    figma.notify(`Invalid border radius value.`, { error: true });
+    return;
+  }
 
   for (const node of figma.currentPage.selection) {
     if ('cornerRadius' in node && typeof node.cornerRadius !== 'symbol') {
