@@ -1,4 +1,7 @@
-import { TokenSet, DesignToken, FlattenedToken } from './src/types';
+import { TokenSet, DesignToken, FlattenedToken, TypographyValue } from './src/types';
+
+// Cache for the variable collection to improve performance when importing many tokens
+let designTokenCollection: VariableCollection | null = null;
 
 figma.showUI(__html__, { width: 800, height: 600, themeColors: true });
 
@@ -13,39 +16,359 @@ figma.ui.onmessage = async (msg) => {
 };
 
 async function handleImportedTokens(tokens: TokenSet) {
-  try {
-    for (const [key, value] of Object.entries(tokens)) {
+  let successCount = 0;
+  let errorCount = 0;
+  let totalCount = 0;
+
+  // Count total tokens
+  const countTokens = (obj: TokenSet): number => {
+    let count = 0;
+    for (const [key, value] of Object.entries(obj)) {
       if ('$type' in value && '$value' in value) {
-        await processToken(key, value as DesignToken);
+        count++;
       } else {
-        await processTokenGroup(key, value as TokenSet);
+        count += countTokens(value as TokenSet);
       }
     }
-    figma.notify('Tokens imported successfully');
+    return count;
+  };
+
+  totalCount = countTokens(tokens);
+
+  // Show initial progress notification
+  figma.notify(`Importing ${totalCount} token${totalCount !== 1 ? 's' : ''}...`, { timeout: 2000 });
+
+  try {
+    // Process tokens in parallel using Promise.allSettled for better performance
+    const results = await Promise.allSettled(
+      Object.entries(tokens).map(async ([key, value]) => {
+        if ('$type' in value && '$value' in value) {
+          await processToken(key, value as DesignToken);
+          return { success: 1, errors: 0 };
+        } else {
+          return await processTokenGroup(key, value as TokenSet);
+        }
+      })
+    );
+
+    // Aggregate results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        successCount += result.value.success;
+        errorCount += result.value.errors;
+      } else {
+        console.error('Token processing failed:', result.reason);
+        errorCount++;
+      }
+    }
+
+    // Show summary notification
+    if (errorCount === 0) {
+      figma.notify(`✓ Successfully imported ${successCount} token${successCount !== 1 ? 's' : ''}`, { timeout: 3000 });
+    } else {
+      figma.notify(`Imported ${successCount} token${successCount !== 1 ? 's' : ''}, ${errorCount} error${errorCount !== 1 ? 's' : ''}`, {
+        error: true,
+        timeout: 5000
+      });
+    }
   } catch (error) {
     console.error('Error importing tokens:', error);
     figma.notify('Error importing tokens', { error: true });
   }
 }
 
-async function processTokenGroup(prefix: string, group: TokenSet) {
-  for (const [key, value] of Object.entries(group)) {
-    const fullKey = `${prefix}/${key}`;
-    if ('$type' in value && '$value' in value) {
-      await processToken(fullKey, value as DesignToken);
+async function processTokenGroup(prefix: string, group: TokenSet): Promise<{ success: number; errors: number }> {
+  let successCount = 0;
+  let errorCount = 0;
+
+  // Process tokens in parallel within the group
+  const results = await Promise.allSettled(
+    Object.entries(group).map(async ([key, value]) => {
+      const fullKey = `${prefix}/${key}`;
+      if ('$type' in value && '$value' in value) {
+        await processToken(fullKey, value as DesignToken);
+        return { success: 1, errors: 0 };
+      } else {
+        return await processTokenGroup(fullKey, value as TokenSet);
+      }
+    })
+  );
+
+  // Aggregate results
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      successCount += result.value.success;
+      errorCount += result.value.errors;
     } else {
-      await processTokenGroup(fullKey, value as TokenSet);
+      console.error('Token group processing failed:', result.reason);
+      errorCount++;
     }
   }
+
+  return { success: successCount, errors: errorCount };
 }
 
 async function processToken(name: string, token: DesignToken) {
-  if (token.$type === 'color') {
-    const style = figma.createPaintStyle();
+  try {
+    switch (token.$type) {
+      case 'color':
+        await processColorToken(name, token.$value as string);
+        break;
+
+      case 'typography':
+        await processTypographyToken(name, token.$value as TypographyValue);
+        break;
+
+      case 'spacing':
+      case 'size':
+        await processNumericVariable(name, token.$type, token.$value as string | number);
+        break;
+
+      case 'opacity':
+        await processOpacityToken(name, token.$value as number);
+        break;
+
+      case 'borderRadius':
+        await processNumericVariable(name, token.$type, token.$value as string | number);
+        break;
+
+      default:
+        console.warn(`Unsupported token type: ${token.$type}`);
+    }
+  } catch (error) {
+    console.error(`Error processing token ${name}:`, error);
+  }
+}
+
+async function processColorToken(name: string, value: string) {
+  // Check if a paint style with this name already exists
+  const existingStyles = figma.getLocalPaintStyles();
+  let style = existingStyles.find(s => s.name === name);
+
+  if (!style) {
+    style = figma.createPaintStyle();
     style.name = name;
-    const color = hexToRgb(token.$value as string);
-    if (color) {
-      style.paints = [{
+  }
+
+  const color = hexToRgb(value);
+  if (!color) {
+    console.warn(`Invalid color value for ${name}: ${value}`);
+    return;
+  }
+
+  style.paints = [{
+    type: 'SOLID',
+    color: {
+      r: color.r / 255,
+      g: color.g / 255,
+      b: color.b / 255
+    }
+  }];
+}
+
+async function processTypographyToken(name: string, value: TypographyValue) {
+  // Validate required fields
+  if (!value.fontFamily || !value.fontSize) {
+    console.warn(`Invalid typography token ${name}: missing fontFamily or fontSize`);
+    return;
+  }
+
+  // Check if a text style with this name already exists
+  const existingStyles = figma.getLocalTextStyles();
+  let style = existingStyles.find(s => s.name === name);
+
+  if (!style) {
+    style = figma.createTextStyle();
+    style.name = name;
+  }
+
+  // Font family and size
+  if (value.fontFamily && value.fontSize) {
+    const fontSize = parseFloat(value.fontSize.toString());
+    const fontLoaded = await tryLoadFont(value.fontFamily, value.fontWeight);
+
+    if (fontLoaded) {
+      style.fontName = fontLoaded;
+      style.fontSize = fontSize;
+    } else {
+      // Fallback to default font
+      await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+      style.fontName = { family: 'Inter', style: 'Regular' };
+      style.fontSize = fontSize;
+    }
+  }
+
+  // Line height
+  if (value.lineHeight) {
+    const lineHeight = parseFloat(value.lineHeight.toString());
+    if (value.lineHeight.toString().includes('%')) {
+      style.lineHeight = { value: lineHeight, unit: 'PERCENT' };
+    } else {
+      style.lineHeight = { value: lineHeight, unit: 'PIXELS' };
+    }
+  }
+
+  // Letter spacing
+  if (value.letterSpacing) {
+    const letterSpacing = parseFloat(value.letterSpacing.toString());
+    if (value.letterSpacing.toString().includes('%')) {
+      style.letterSpacing = { value: letterSpacing, unit: 'PERCENT' };
+    } else {
+      style.letterSpacing = { value: letterSpacing, unit: 'PIXELS' };
+    }
+  }
+
+  // Text transform (handled differently in Figma, stored as plugin data)
+  if (value.textTransform) {
+    style.setPluginData('textTransform', value.textTransform);
+  }
+}
+
+async function tryLoadFont(family: string, weight?: string | number): Promise<{ family: string; style: string } | null> {
+  const weightMap: Record<string, string[]> = {
+    '100': ['Thin', 'Hairline'],
+    '200': ['ExtraLight', 'Extra Light', 'UltraLight', 'Ultra Light'],
+    '300': ['Light'],
+    '400': ['Regular', 'Normal'],
+    '500': ['Medium'],
+    '600': ['SemiBold', 'Semi Bold', 'DemiBold', 'Demi Bold'],
+    '700': ['Bold'],
+    '800': ['ExtraBold', 'Extra Bold', 'UltraBold', 'Ultra Bold'],
+    '900': ['Black', 'Heavy'],
+  };
+
+  // Get list of styles to try
+  let stylesToTry: string[] = ['Regular'];
+
+  if (weight) {
+    const numericWeight = typeof weight === 'number' ? weight.toString() : parseInt(weight.toString()).toString();
+    if (weightMap[numericWeight]) {
+      stylesToTry = weightMap[numericWeight];
+    } else if (typeof weight === 'string') {
+      stylesToTry = [weight];
+    }
+  }
+
+  // Try each style
+  for (const style of stylesToTry) {
+    try {
+      await figma.loadFontAsync({ family, style });
+      return { family, style };
+    } catch (error) {
+      // Try next style
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function processNumericVariable(name: string, type: string, value: string | number) {
+  const collection = await getOrCreateVariableCollection('Design Tokens');
+  const numericValue = parseFloat(value.toString());
+
+  // Validate numeric value
+  if (isNaN(numericValue)) {
+    console.warn(`Invalid numeric value for ${name}: ${value}`);
+    return;
+  }
+
+  // Check if variable already exists
+  const existingVariableId = collection.variables.find(v => {
+    const existingVar = figma.variables.getVariableById(v);
+    return existingVar?.name === name;
+  });
+
+  if (existingVariableId) {
+    const existingVar = figma.variables.getVariableById(existingVariableId);
+    if (existingVar) {
+      existingVar.setValueForMode(collection.modes[0].modeId, numericValue);
+      existingVar.description = type;
+    }
+  } else {
+    const newVariable = figma.variables.createVariable(name, collection, 'FLOAT');
+    newVariable.setValueForMode(collection.modes[0].modeId, numericValue);
+    newVariable.description = type;
+  }
+}
+
+async function processOpacityToken(name: string, value: number) {
+  // Do not create an EffectStyle for opacity as there is no corresponding
+  // effect type in Figma. Applying opacity is handled directly on the node's
+  // opacity property. Creating an empty style here would be misleading for users.
+  // The opacity value is applied directly in applyOpacityToken().
+}
+
+async function getOrCreateVariableCollection(name: string) {
+  // Use cached collection if it exists and hasn't been removed
+  if (designTokenCollection && !designTokenCollection.removed && designTokenCollection.name === name) {
+    return designTokenCollection;
+  }
+
+  const collections = figma.variables.getLocalVariableCollections();
+  let collection = collections.find(c => c.name === name);
+
+  if (!collection) {
+    collection = figma.variables.createVariableCollection(name);
+  }
+
+  // Cache the collection for subsequent calls
+  designTokenCollection = collection;
+  return collection;
+}
+
+async function applyToken(token: FlattenedToken) {
+  if (!figma.currentPage.selection.length) {
+    figma.notify('Please select at least one layer');
+    return;
+  }
+
+  try {
+    switch (token.type) {
+      case 'color':
+        await applyColorToken(token.value as string);
+        break;
+
+      case 'typography':
+        await applyTypographyToken(token.value as TypographyValue);
+        break;
+
+      case 'spacing':
+      case 'size':
+        await applyNumericToken(token.value as string | number, token.type);
+        break;
+
+      case 'opacity':
+        await applyOpacityToken(token.value as number);
+        break;
+
+      case 'borderRadius':
+        await applyBorderRadiusToken(token.value as string | number);
+        break;
+
+      default:
+        figma.notify(`Token type ${token.type} cannot be directly applied`, { error: true });
+        return;
+    }
+
+    figma.notify(`Applied ${token.path.join('.')} to ${figma.currentPage.selection.length} layer(s)`);
+  } catch (error) {
+    console.error('Error applying token:', error);
+    figma.notify('Error applying token', { error: true });
+  }
+}
+
+async function applyColorToken(value: string) {
+  const color = hexToRgb(value);
+  if (!color) {
+    console.warn(`Invalid color value: ${value}`);
+    figma.notify(`Invalid color value: ${value}`, { error: true });
+    return;
+  }
+
+  for (const node of figma.currentPage.selection) {
+    if ('fills' in node) {
+      node.fills = [{
         type: 'SOLID',
         color: {
           r: color.r / 255,
@@ -57,35 +380,110 @@ async function processToken(name: string, token: DesignToken) {
   }
 }
 
-async function applyToken(token: FlattenedToken) {
-  if (!figma.currentPage.selection.length) {
-    figma.notify('Please select at least one layer');
+async function applyTypographyToken(value: TypographyValue) {
+  // Validate required fields
+  if (!value.fontFamily || !value.fontSize) {
+    console.warn('Invalid typography token: missing fontFamily or fontSize');
+    figma.notify('Invalid typography token', { error: true });
     return;
   }
 
-  try {
-    if (token.type === 'color') {
-      const color = hexToRgb(token.value as string);
-      if (!color) return;
+  for (const node of figma.currentPage.selection) {
+    if (node.type === 'TEXT') {
+      const fontSize = parseFloat(value.fontSize.toString());
+      const fontLoaded = await tryLoadFont(value.fontFamily, value.fontWeight);
 
-      for (const node of figma.currentPage.selection) {
-        if ('fills' in node) {
-          node.fills = [{
-            type: 'SOLID',
-            color: {
-              r: color.r / 255,
-              g: color.g / 255,
-              b: color.b / 255
-            }
-          }];
+      if (fontLoaded) {
+        node.fontName = fontLoaded;
+        node.fontSize = fontSize;
+
+        // Line height
+        if (value.lineHeight) {
+          const lineHeight = parseFloat(value.lineHeight.toString());
+          if (value.lineHeight.toString().includes('%')) {
+            node.lineHeight = { value: lineHeight, unit: 'PERCENT' };
+          } else {
+            node.lineHeight = { value: lineHeight, unit: 'PIXELS' };
+          }
         }
+
+        // Letter spacing
+        if (value.letterSpacing) {
+          const letterSpacing = parseFloat(value.letterSpacing.toString());
+          if (value.letterSpacing.toString().includes('%')) {
+            node.letterSpacing = { value: letterSpacing, unit: 'PERCENT' };
+          } else {
+            node.letterSpacing = { value: letterSpacing, unit: 'PIXELS' };
+          }
+        }
+      } else {
+        console.error(`Failed to load font ${value.fontFamily}`);
+        // Fallback to default font
+        await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+        node.fontName = { family: 'Inter', style: 'Regular' };
+        node.fontSize = fontSize;
       }
     }
-    
-    figma.notify(`Applied ${token.path.join('.')} to ${figma.currentPage.selection.length} layers`);
-  } catch (error) {
-    console.error('Error applying token:', error);
-    figma.notify('Error applying token', { error: true });
+  }
+}
+
+async function applyNumericToken(value: string | number, type: string) {
+  const numericValue = parseFloat(value.toString());
+
+  // Validate numeric value
+  if (isNaN(numericValue) || numericValue < 0) {
+    console.warn(`Invalid ${type} value: ${value}. Must be a non-negative number.`);
+    figma.notify(`Invalid ${type} value.`, { error: true });
+    return;
+  }
+
+  for (const node of figma.currentPage.selection) {
+    if (type === 'spacing') {
+      // Apply as padding/spacing in Auto Layout
+      if ('paddingLeft' in node) {
+        node.paddingLeft = numericValue;
+        node.paddingRight = numericValue;
+        node.paddingTop = numericValue;
+        node.paddingBottom = numericValue;
+      }
+    } else if (type === 'size') {
+      // Apply as width/height
+      if ('resize' in node) {
+        node.resize(numericValue, numericValue);
+      }
+    }
+  }
+}
+
+async function applyOpacityToken(value: number) {
+  // Validate opacity value (0-1)
+  if (value < 0 || value > 1) {
+    console.warn(`Invalid opacity value: ${value}. Must be between 0 and 1.`);
+    figma.notify(`Invalid opacity value. Must be between 0 and 1.`, { error: true });
+    return;
+  }
+
+  for (const node of figma.currentPage.selection) {
+    if ('opacity' in node) {
+      node.opacity = value;
+    }
+  }
+}
+
+async function applyBorderRadiusToken(value: string | number) {
+  const numericValue = parseFloat(value.toString());
+
+  // Validate numeric value
+  if (isNaN(numericValue) || numericValue < 0) {
+    console.warn(`Invalid border radius value: ${value}. Must be a non-negative number.`);
+    figma.notify(`Invalid border radius value.`, { error: true });
+    return;
+  }
+
+  for (const node of figma.currentPage.selection) {
+    if ('cornerRadius' in node && typeof node.cornerRadius !== 'symbol') {
+      node.cornerRadius = numericValue;
+    }
   }
 }
 
