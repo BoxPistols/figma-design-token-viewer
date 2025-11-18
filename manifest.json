@@ -1,25 +1,13 @@
 {
-  "name": "Design Token Studio",
-  "id": "design-token-studio",
+  "name": "Design Tokens Manager - MUI/MD2",
+  "id": "design-tokens-manager-mui-md2",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
   "editorType": ["figma"],
-  "menu": [
-    {
-      "name": "Import Tokens",
-      "command": "import-tokens"
-    },
-    {
-      "name": "Export Tokens",
-      "command": "export-tokens"
-    },
-    {
-      "separator": true
-    },
-    {
-      "name": "About",
-      "command": "about"
-    }
-  ]
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  },
+  "documentAccess": "dynamic-page",
+  "capabilities": []
 }

@@ -87,6 +87,19 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedToken, setSelectedToken] = useState<FlattenedToken | null>(null);
 
+  // Listen for messages from plugin (exported tokens)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const msg = event.data.pluginMessage;
+      if (msg && msg.type === 'exported-tokens') {
+        setTokens(msg.tokens);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   // Save state to localStorage
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.TOKENS, tokens);
@@ -142,6 +155,10 @@ function App() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportFromFigma = () => {
+    parent.postMessage({ pluginMessage: { type: 'export-tokens' } }, '*');
   };
 
   const handleReset = () => {
@@ -405,25 +422,35 @@ function App() {
           {/* Import/Export */}
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
             <h3 className="text-sm font-semibold mb-3 dark:text-white">Import/Export</h3>
-            <div className="flex gap-2">
-              <label className="flex-1">
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <div className="flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 text-sm">
-                  <Import className="w-4 h-4 mr-2" />
-                  <span className="dark:text-gray-300">Import</span>
-                </div>
-              </label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <div className="flex items-center justify-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 text-sm">
+                    <Import className="w-4 h-4 mr-2" />
+                    <span className="dark:text-gray-300">Import JSON</span>
+                  </div>
+                </label>
+                <button
+                  onClick={handleExport}
+                  className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export JSON
+                </button>
+              </div>
               <button
-                onClick={handleExport}
-                className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                onClick={handleExportFromFigma}
+                className="w-full flex items-center justify-center px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm"
+                title="Export tokens from current Figma file"
               >
-                <Download className="w-4 h-4 mr-2" />
-                Export
+                <Palette className="w-4 h-4 mr-2" />
+                Export from Figma
               </button>
             </div>
           </div>

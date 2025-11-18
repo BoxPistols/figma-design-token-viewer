@@ -10,10 +10,161 @@ figma.ui.onmessage = async (msg) => {
     await handleImportedTokens(msg.tokens);
   } else if (msg.type === 'apply-token') {
     await applyToken(msg.token);
+  } else if (msg.type === 'export-tokens') {
+    await handleExportTokens();
   } else if (msg.type === 'close-plugin') {
     figma.closePlugin();
   }
 };
+
+async function handleExportTokens() {
+  try {
+    const tokens: TokenSet = {};
+
+    // Export Paint Styles (Colors)
+    const paintStyles = figma.getLocalPaintStyles();
+    if (paintStyles.length > 0) {
+      tokens.colors = {};
+      for (const style of paintStyles) {
+        const pathParts = style.name.split('/');
+        let current: any = tokens.colors;
+
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          if (!current[pathParts[i]]) {
+            current[pathParts[i]] = {};
+          }
+          current = current[pathParts[i]];
+        }
+
+        const lastName = pathParts[pathParts.length - 1];
+        const paint = style.paints[0];
+
+        if (paint && paint.type === 'SOLID') {
+          const r = Math.round(paint.color.r * 255);
+          const g = Math.round(paint.color.g * 255);
+          const b = Math.round(paint.color.b * 255);
+          const a = paint.opacity ?? 1;
+
+          current[lastName] = {
+            $type: 'color',
+            $value: a < 1
+              ? `rgba(${r}, ${g}, ${b}, ${a})`
+              : `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase(),
+            $description: style.description || undefined
+          };
+        }
+      }
+    }
+
+    // Export Text Styles (Typography)
+    const textStyles = figma.getLocalTextStyles();
+    if (textStyles.length > 0) {
+      tokens.typography = {};
+      for (const style of textStyles) {
+        const pathParts = style.name.split('/');
+        let current: any = tokens.typography;
+
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          if (!current[pathParts[i]]) {
+            current[pathParts[i]] = {};
+          }
+          current = current[pathParts[i]];
+        }
+
+        const lastName = pathParts[pathParts.length - 1];
+        const fontName = style.fontName as FontName;
+
+        current[lastName] = {
+          $type: 'typography',
+          $value: {
+            fontFamily: fontName.family,
+            fontSize: style.fontSize.toString(),
+            fontWeight: getFontWeightFromStyle(fontName.style),
+            lineHeight: typeof style.lineHeight === 'object' && 'value' in style.lineHeight
+              ? style.lineHeight.value.toString()
+              : undefined,
+            letterSpacing: typeof style.letterSpacing === 'object' && 'value' in style.letterSpacing
+              ? style.letterSpacing.value.toString()
+              : undefined
+          },
+          $description: style.description || undefined
+        };
+      }
+    }
+
+    // Export Variables (Spacing, Size, BorderRadius)
+    const collections = figma.variables.getLocalVariableCollections();
+    for (const collection of collections) {
+      for (const variableId of collection.variableIds) {
+        const variable = figma.variables.getVariableById(variableId);
+        if (!variable) continue;
+
+        const pathParts = variable.name.split('/');
+        const tokenType = variable.description || 'spacing';
+
+        if (!tokens[tokenType]) {
+          tokens[tokenType] = {};
+        }
+
+        let current: any = tokens[tokenType];
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          if (!current[pathParts[i]]) {
+            current[pathParts[i]] = {};
+          }
+          current = current[pathParts[i]];
+        }
+
+        const lastName = pathParts[pathParts.length - 1];
+        const value = variable.valuesByMode[collection.modes[0].modeId];
+
+        current[lastName] = {
+          $type: tokenType,
+          $value: typeof value === 'number' ? value.toString() : value,
+          $description: variable.description || undefined
+        };
+      }
+    }
+
+    // Send tokens back to UI
+    figma.ui.postMessage({
+      type: 'exported-tokens',
+      tokens
+    });
+
+    figma.notify(`Exported ${Object.keys(tokens).length} token type(s)`, { timeout: 3000 });
+  } catch (error) {
+    console.error('Error exporting tokens:', error);
+    figma.notify('Error exporting tokens', { error: true });
+  }
+}
+
+function getFontWeightFromStyle(style: string): string {
+  const weightMap: Record<string, string> = {
+    'Thin': '100',
+    'Hairline': '100',
+    'ExtraLight': '200',
+    'Extra Light': '200',
+    'UltraLight': '200',
+    'Ultra Light': '200',
+    'Light': '300',
+    'Regular': '400',
+    'Normal': '400',
+    'Medium': '500',
+    'SemiBold': '600',
+    'Semi Bold': '600',
+    'DemiBold': '600',
+    'Demi Bold': '600',
+    'Bold': '700',
+    'ExtraBold': '800',
+    'Extra Bold': '800',
+    'UltraBold': '800',
+    'Ultra Bold': '800',
+    'Black': '900',
+    'Heavy': '900'
+  };
+
+  return weightMap[style] || '400';
+}
 
 async function handleImportedTokens(tokens: TokenSet) {
   let successCount = 0;
@@ -150,7 +301,7 @@ async function processColorToken(name: string, value: string) {
     style.name = name;
   }
 
-  const color = hexToRgb(value);
+  const color = parseColor(value);
   if (!color) {
     console.warn(`Invalid color value for ${name}: ${value}`);
     return;
@@ -159,10 +310,11 @@ async function processColorToken(name: string, value: string) {
   style.paints = [{
     type: 'SOLID',
     color: {
-      r: color.r / 255,
-      g: color.g / 255,
-      b: color.b / 255
-    }
+      r: color.r,
+      g: color.g,
+      b: color.b
+    },
+    opacity: color.a
   }];
 }
 
@@ -274,8 +426,8 @@ async function processNumericVariable(name: string, type: string, value: string 
   }
 
   // Check if variable already exists
-  const existingVariableId = collection.variables.find(v => {
-    const existingVar = figma.variables.getVariableById(v);
+  const existingVariableId = collection.variableIds.find((varId: string) => {
+    const existingVar = figma.variables.getVariableById(varId);
     return existingVar?.name === name;
   });
 
@@ -301,8 +453,16 @@ async function processOpacityToken(name: string, value: number) {
 
 async function getOrCreateVariableCollection(name: string) {
   // Use cached collection if it exists and hasn't been removed
-  if (designTokenCollection && !designTokenCollection.removed && designTokenCollection.name === name) {
-    return designTokenCollection;
+  // Note: Check if collection still exists by trying to access its properties
+  if (designTokenCollection && designTokenCollection.name === name) {
+    try {
+      // Try to access a property to ensure it hasn't been deleted
+      const _ = designTokenCollection.modes;
+      return designTokenCollection;
+    } catch (e) {
+      // Collection has been removed, need to recreate
+      designTokenCollection = null;
+    }
   }
 
   const collections = figma.variables.getLocalVariableCollections();
@@ -359,7 +519,7 @@ async function applyToken(token: FlattenedToken) {
 }
 
 async function applyColorToken(value: string) {
-  const color = hexToRgb(value);
+  const color = parseColor(value);
   if (!color) {
     console.warn(`Invalid color value: ${value}`);
     figma.notify(`Invalid color value: ${value}`, { error: true });
@@ -371,10 +531,11 @@ async function applyColorToken(value: string) {
       node.fills = [{
         type: 'SOLID',
         color: {
-          r: color.r / 255,
-          g: color.g / 255,
-          b: color.b / 255
-        }
+          r: color.r,
+          g: color.g,
+          b: color.b
+        },
+        opacity: color.a
       }];
     }
   }
@@ -482,11 +643,49 @@ async function applyBorderRadiusToken(value: string | number) {
 
   for (const node of figma.currentPage.selection) {
     if ('cornerRadius' in node && typeof node.cornerRadius !== 'symbol') {
-      node.cornerRadius = numericValue;
+      // Set all corner radii to the same value
+      if ('topLeftRadius' in node) {
+        node.topLeftRadius = numericValue;
+        node.topRightRadius = numericValue;
+        node.bottomLeftRadius = numericValue;
+        node.bottomRightRadius = numericValue;
+      }
     }
   }
 }
 
+/**
+ * Parse color string (HEX or RGBA) to normalized RGB values (0-1) with alpha
+ */
+function parseColor(value: string): { r: number; g: number; b: number; a: number } | null {
+  // Try HEX format first
+  const hexMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(value.trim());
+  if (hexMatch) {
+    return {
+      r: parseInt(hexMatch[1], 16) / 255,
+      g: parseInt(hexMatch[2], 16) / 255,
+      b: parseInt(hexMatch[3], 16) / 255,
+      a: 1
+    };
+  }
+
+  // Try RGBA format
+  const rgbaMatch = /^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)$/i.exec(value.trim());
+  if (rgbaMatch) {
+    return {
+      r: parseInt(rgbaMatch[1]) / 255,
+      g: parseInt(rgbaMatch[2]) / 255,
+      b: parseInt(rgbaMatch[3]) / 255,
+      a: rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1
+    };
+  }
+
+  return null;
+}
+
+/**
+ * @deprecated Use parseColor instead
+ */
 function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? {
