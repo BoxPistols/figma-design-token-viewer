@@ -1,6 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .bg { fill: #1E1E1E; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #f0f0f0; }
+    }
+  </style>
   <!-- Design Token Icon - Grid of colored tokens -->
-  <rect width="32" height="32" rx="6" fill="#1E1E1E"/>
+  <rect class="bg" width="32" height="32" rx="6"/>
 
   <!-- Token grid -->
   <rect x="4" y="4" width="10" height="10" rx="2" fill="#FF6B6B"/>
